@@ -7,27 +7,32 @@ in the challenge cards, then identify and fix the vulnerabilities.
 """
 
 import sqlite3
-from flask import Flask, g
+from flask import Flask, g, request
+import bcrypt
 
 app = Flask(__name__)
-app.config["DATABASE"] = "users.db"
+app.config["DATABASE"] = ":memory:"
 app.config["SECRET_KEY"] = "change-me-in-production"
-
+app.config["TESTING"] = False
 
 # ── Database helpers ────────────────────────────────────────────────────────
+_db_connection: sqlite3.Connection | None = None
 
-def get_db():
-    """Return a database connection, creating one if needed."""
-    if "db" not in g:
-        g.db = sqlite3.connect(
+
+def get_db() -> sqlite3.Connection:
+    """Return the shared database connection, creating it once if needed."""
+    global _db_connection
+    if _db_connection is None:
+        _db_connection = sqlite3.connect(
             app.config["DATABASE"],
-            detect_types=sqlite3.PARSE_DECLTYPES
+            detect_types=sqlite3.PARSE_DECLTYPES,
+            check_same_thread=False,   # allow access from test threads
         )
-        g.db.row_factory = sqlite3.Row
-    return g.db
-
-
-def init_db():
+        _db_connection.row_factory = sqlite3.Row
+    return _db_connection
+ 
+ 
+def init_db() -> None:
     """Create tables if they don't exist."""
     db = get_db()
     db.executescript("""
@@ -42,14 +47,11 @@ def init_db():
             details  TEXT
         );
     """)
+    db.execute(
+        "INSERT OR IGNORE INTO users (username, password) VALUES (?, ?)",
+        ("testuser", "testpassword")
+    )
     db.commit()
-
-
-@app.teardown_appcontext
-def close_db(error):
-    db = g.pop("db", None)
-    if db is not None:
-        db.close()
 
 
 # ── Lab 01: SQL Injection ────────────────────────────────────────────────────
@@ -57,15 +59,29 @@ def close_db(error):
 #               and password against a SQLite database called users.db"
 # Paste Copilot's code below this comment, then find and fix the vulnerability.
 
-# YOUR CODE HERE
+# Fixed Code 
+@app.route('/login', methods=['POST'])
+def login():
+    username = request.form.get('username')
+    password = request.form.get('password')
+    db = get_db()
 
-
+    user = db.execute(
+        "SELECT * FROM users WHERE username = ?",
+        (username,)
+    ).fetchone()
+ 
+    if user and bcrypt.checkpw(password.encode('utf-8'), user['password']):
+        return "Login successful"
+    else:
+        return "Invalid credentials", 401
+ 
 # ── Lab 02: Cross-Site Scripting (XSS) ──────────────────────────────────────
 # Ask Copilot: "Write a Flask GET /search route that displays search results
 #               for a query parameter q in an HTML response"
 # Paste Copilot's code below this comment, then find and fix the vulnerability.
 
-# YOUR CODE HERE
+
 
 
 # ── Lab 03: Broken Authentication ────────────────────────────────────────────
@@ -107,8 +123,7 @@ def close_db(error):
 
 # YOUR CODE HERE
 
-
+init_db()
+ 
 if __name__ == "__main__":
-    with app.app_context():
-        init_db()
-    app.run(debug=True)
+    app.run(debug=False)
