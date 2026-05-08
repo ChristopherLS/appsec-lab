@@ -81,7 +81,41 @@ def login():
 #               for a query parameter q in an HTML response"
 # Paste Copilot's code below this comment, then find and fix the vulnerability.
 
+#Original Code - Bad Code with XSS Vulnerability
+"""
+@app.route('/search')
+def search():
+    query = request.args.get('q', '')
+    db = get_db()
+    
+    results = db.execute(
+        f"SELECT * FROM invoices WHERE details LIKE '%{query}%'"
+    ).fetchall()
+    
+    html = f"<h1>Search Results for: {query}</h1>"
+    for row in results:
+        html += f"<p>{row['details']}</p>"
+    
+    return html
+"""
+from markupsafe import escape
 
+@app.route('/search')
+def search():
+    query = request.args.get('q', '')
+    db = get_db()
+
+    results = db.execute(
+        "SELECT * FROM invoices WHERE details LIKE ?",
+        ('%' + query + '%',)
+    ).fetchall()
+
+    html = f"<h1>Search Results for: {escape(query)}</h1>"
+
+    for row in results:
+        html += f"<p>{escape(row['details'])}</p>"
+
+    return html
 
 
 # ── Lab 03: Broken Authentication ────────────────────────────────────────────
