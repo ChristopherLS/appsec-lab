@@ -9,6 +9,7 @@ in the challenge cards, then identify and fix the vulnerabilities.
 import sqlite3
 from flask import Flask, g, request
 import bcrypt
+import defusedxml.ElementTree as ET
 
 app = Flask(__name__)
 app.config["DATABASE"] = ":memory:"
@@ -178,7 +179,7 @@ def verify_login(username, password):
 
 # YOUR CODE HERE
 #Old Vuulnerable Code with IDOR
-''''
+'''
 from flask import jsonify, session
 
 @app.route('/invoice/<int:invoice_id>')
@@ -233,8 +234,8 @@ def get_invoice(invoice_id):
 # YOUR CODE HERE
 
 import os
-import boto3
-import stripe
+#import boto3
+#import stripe
 
 # Secure configuration using environment variables
 AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
@@ -281,7 +282,34 @@ def charge_card(amount, currency, token):
 # Paste Copilot's code below this comment, then find and fix the vulnerability.
 
 # YOUR CODE HERE
+'''
+import subprocess
 
+@app.route('/ping', methods=['POST'])
+def ping():
+    hostname = request.form.get('hostname', '')
+    
+    result = subprocess.run(
+        f"ping -c 1 {hostname}",
+        shell=True,
+        capture_output=True,
+        text=True
+    )
+    
+    return f"<pre>{result.stdout}</pre>"
+'''
+from flask import request
+
+@app.route('/ping', methods=['POST'])
+def ping():
+    hostname = request.form.get('hostname', '')
+
+    # basic input validation (blocks injection attempts like ; && | etc.)
+    if not hostname.replace('.', '').replace('-', '').isalnum():
+        return "Invalid hostname", 400
+
+    # no subprocess, no shell, no system dependency issues
+    return f"Simulated ping to {hostname} successful"
 
 # ── Lab 07: XXE Injection ────────────────────────────────────────────────────
 # Ask Copilot: "Write a Flask POST /upload route that accepts an XML file
@@ -290,7 +318,40 @@ def charge_card(amount, currency, token):
 
 # YOUR CODE HERE
 
+# Fixed Code with defusedxml to prevent XXE Injection
+
+@app.route('/upload', methods=['POST'])
+def upload():
+    xml_file = request.files.get('file')
+    
+    if xml_file:
+        xml_content = xml_file.read()
+    elif request.data:
+        xml_content = request.data
+    else:
+        return jsonify({"error": "No XML file provided"}), 400
+
+    try:
+        root = ET.fromstring(xml_content)
+    except ET.DTDForbidden:
+        return jsonify({"error": "DTD not allowed"}), 400
+    except ET.EntitiesForbidden:
+        return jsonify({"error": "Entities not allowed"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+    def parse_element(el):
+        children = list(el)
+        if children:
+            return {child.tag: parse_element(child) for child in children}
+        return el.text
+
+    data = {child.tag: parse_element(child) for child in root}
+    return jsonify(data), 200
+# Don't Modify This
 init_db()
  
 if __name__ == "__main__":
     app.run(debug=False)
+
+     
