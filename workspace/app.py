@@ -177,8 +177,54 @@ def verify_login(username, password):
 # Paste Copilot's code below this comment, then find and fix the vulnerability.
 
 # YOUR CODE HERE
+#Old Vuulnerable Code with IDOR
+''''
+from flask import jsonify, session
 
+@app.route('/invoice/<int:invoice_id>')
+def get_invoice(invoice_id):
+    db = get_db()
+    
+    invoice = db.execute(
+        "SELECT * FROM invoices WHERE id = ?",
+        (invoice_id,)
+    ).fetchone()
+    
+    if invoice is None:
+        return jsonify({"error": "Invoice not found"}), 404
+    
+    return jsonify({
+        "id": invoice["id"],
+        "user_id": invoice["user_id"],
+        "amount": invoice["amount"],
+        "details": invoice["details"]
+    })
+'''
+from flask import jsonify, session
 
+@app.route('/invoice/<int:invoice_id>')
+def get_invoice(invoice_id):
+    db = get_db()
+
+    current_user = session.get("user_id")
+
+    if not current_user:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    invoice = db.execute(
+        "SELECT * FROM invoices WHERE id = ? AND user_id = ?",
+        (invoice_id, current_user)
+    ).fetchone()
+
+    if invoice is None:
+        return jsonify({"error": "Invoice not found or access denied"}), 404
+
+    return jsonify({
+        "id": invoice["id"],
+        "user_id": invoice["user_id"],
+        "amount": invoice["amount"],
+        "details": invoice["details"]
+    })
 # ── Lab 05: Sensitive Data Exposure ──────────────────────────────────────────
 # Ask Copilot: "Write a Python module that connects to AWS S3 and
 #               a Stripe payment API using configuration variables"
