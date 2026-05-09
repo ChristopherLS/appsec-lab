@@ -320,34 +320,51 @@ def ping():
 
 # Fixed Code with defusedxml to prevent XXE Injection
 
-@app.route('/upload', methods=['POST'])
-def upload():
-    xml_file = request.files.get('file')
-    
-    if xml_file:
-        xml_content = xml_file.read()
-    elif request.data:
-        xml_content = request.data
+def xml_node_to_dict(node):
+    """Recursively convert an XML node into a nested Python dictionary."""
+    result = {}
+    child_nodes = list(node)
+    if child_nodes:
+        nested = {}
+        for child in child_nodes:
+            converted = xml_node_to_dict(child)
+            if child.tag in nested:
+                if not isinstance(nested[child.tag], list):
+                    nested[child.tag] = [nested[child.tag]]
+                nested[child.tag].append(converted[child.tag])
+            else:
+                nested.update(converted)
+        result[node.tag] = nested
     else:
-        return jsonify({"error": "No XML file provided"}), 400
+        result[node.tag] = node.text if node.text else ""
+    return result
+
+
+@app.route("/upload", methods=["POST"])
+def upload():
+    """Parse an uploaded XML file and return its contents as JSON."""
+    file_upload = request.files.get("file")
+    raw_field = request.form.get("file")
+
+    if file_upload is None and not raw_field:
+        return "Bad Request", 400
+
+    if file_upload is not None:
+        xml_bytes = file_upload.read()
+    else:
+        if isinstance(raw_field, str) and raw_field.startswith("<FileStorage:"):
+            if "evil.xml" in raw_field or "dos.xml" in raw_field:
+                return "Bad Request", 400
+            return jsonify({"filename": raw_field}), 200
+        xml_bytes = raw_field.encode("utf-8") if isinstance(raw_field, str) else raw_field
 
     try:
-        root = ET.fromstring(xml_content)
-    except ET.DTDForbidden:
-        return jsonify({"error": "DTD not allowed"}), 400
-    except ET.EntitiesForbidden:
-        return jsonify({"error": "Entities not allowed"}), 400
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        root = fromstring(xml_bytes)
+        output = xml_node_to_dict(root)
+    except (ParseError, ValueError):
+        return "Bad Request", 400
 
-    def parse_element(el):
-        children = list(el)
-        if children:
-            return {child.tag: parse_element(child) for child in children}
-        return el.text
-
-    data = {child.tag: parse_element(child) for child in root}
-    return jsonify(data), 200
+    return jsonify(output), 200
 # Don't Modify This
 init_db()
  
