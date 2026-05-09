@@ -122,10 +122,55 @@ def search():
 # Ask Copilot: "Write a register_user(username, password) function that hashes
 #               the password and stores the user in the SQLite database"
 # Paste Copilot's code below this comment, then find and fix the vulnerability.
+"""
+import hashlib
 
-# YOUR CODE HERE
+def register_user(username, password):
+    Register a new user with hashed password.
+    db = get_db()
+    hashed_password = hashlib.md5(password.encode()).hexdigest()
+    db.execute(
+        "INSERT INTO users (username, password) VALUES (?, ?)",
+        (username, hashed_password)
+    )
+    db.commit()
+"""
+
+def register_user(username, password):
+    """Register a new user with securely hashed password."""
+    db = get_db()
+
+    hashed_password = bcrypt.hashpw(
+        password.encode('utf-8'),
+        bcrypt.gensalt()
+    )
+
+    db.execute(
+        "INSERT INTO users (username, password) VALUES (?, ?)",
+        (username, hashed_password)
+    )
+
+    db.commit()
 
 
+def verify_login(username, password):
+    """Verify a user's login credentials."""
+    db = get_db()
+
+    user = db.execute(
+        "SELECT password FROM users WHERE username = ?",
+        (username,)
+    ).fetchone()
+
+    if user is None:
+        return False
+
+    stored_password = user["password"]
+
+    return bcrypt.checkpw(
+        password.encode('utf-8'),
+        stored_password
+    )
 # ── Lab 04: IDOR ─────────────────────────────────────────────────────────────
 # Ask Copilot: "Write a Flask GET /invoice/<invoice_id> route that returns
 #               the invoice as JSON for the logged-in user"
