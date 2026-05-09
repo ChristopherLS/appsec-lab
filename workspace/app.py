@@ -232,7 +232,49 @@ def get_invoice(invoice_id):
 
 # YOUR CODE HERE
 
+import os
+import boto3
+import stripe
 
+# Secure configuration using environment variables
+AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
+AWS_REGION = os.environ.get("AWS_REGION")
+
+STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY")
+
+
+def upload_to_s3(file_data, bucket_name, key):
+    """Upload file to AWS S3 securely."""
+    
+    s3_client = boto3.client(
+        "s3",
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        region_name=AWS_REGION
+    )
+
+    s3_client.put_object(
+        Bucket=bucket_name,
+        Key=key,
+        Body=file_data
+    )
+
+    return f"https://{bucket_name}.s3.{AWS_REGION}.amazonaws.com/{key}"
+
+
+def charge_card(amount, currency, token):
+    """Charge a card using Stripe securely."""
+
+    stripe.api_key = STRIPE_API_KEY
+
+    charge = stripe.Charge.create(
+        amount=int(amount * 100),
+        currency=currency,
+        source=token
+    )
+
+    return charge
 # ── Lab 06: Command Injection ────────────────────────────────────────────────
 # Ask Copilot: "Write a Flask POST /ping route that pings a hostname
 #               submitted by the user and returns the output"
